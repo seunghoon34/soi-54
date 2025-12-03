@@ -82,23 +82,6 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'get_recent_orders',
-      description: 'Get details of recent orders',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: {
-            type: 'number',
-            description: 'Number of orders to return (default 10)',
-          },
-        },
-        required: [],
-      },
-    },
-  },
 ]
 
 // Tool execution functions
@@ -112,7 +95,6 @@ async function getSalesSummary(days: number) {
     .gte('order_date', startDate)
     .lte('order_date', endDate)
 
-  // Filter out Sundays
   const filteredOrders = orders?.filter((o) => getDay(parseISO(o.order_date)) !== 0) || []
   const orderIds = filteredOrders.map((o) => o.id)
 
@@ -136,7 +118,6 @@ async function getSalesSummary(days: number) {
     totalItems,
     averageOrderValue: totalOrders > 0 ? `₩${Math.round(totalRevenue / totalOrders).toLocaleString('ko-KR')}` : '₩0',
     averageItemsPerDay: uniqueDays > 0 ? Math.round(totalItems / uniqueDays) : 0,
-    averageRevenuePerDay: uniqueDays > 0 ? `₩${Math.round(totalRevenue / uniqueDays).toLocaleString('ko-KR')}` : '₩0',
     daysWithSales: uniqueDays,
   }
 }
@@ -236,7 +217,7 @@ async function getDailyRevenue(days: number) {
 
   const dailyMap = new Map<string, { revenue: number; items: number }>()
   orders?.forEach((order) => {
-    if (getDay(parseISO(order.order_date)) === 0) return // Skip Sundays
+    if (getDay(parseISO(order.order_date)) === 0) return
     const existing = dailyMap.get(order.order_date) || { revenue: 0, items: 0 }
     dailyMap.set(order.order_date, {
       revenue: existing.revenue + order.total_amount,
@@ -251,21 +232,6 @@ async function getDailyRevenue(days: number) {
   }))
 }
 
-async function getRecentOrders(limit: number = 10) {
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('order_date, total_amount, item_count, receipt_filename')
-    .order('order_date', { ascending: false })
-    .limit(limit)
-
-  return orders?.map((o) => ({
-    date: o.order_date,
-    revenue: `₩${o.total_amount.toLocaleString('ko-KR')}`,
-    items: o.item_count,
-    receipt: o.receipt_filename,
-  })) || []
-}
-
 // Execute tool calls
 async function executeTool(name: string, args: Record<string, unknown>) {
   switch (name) {
@@ -277,8 +243,6 @@ async function executeTool(name: string, args: Record<string, unknown>) {
       return await getCategoryBreakdown(args.days as number)
     case 'get_daily_revenue':
       return await getDailyRevenue(args.days as number)
-    case 'get_recent_orders':
-      return await getRecentOrders(args.limit as number)
     default:
       return { error: 'Unknown tool' }
   }
@@ -289,7 +253,7 @@ export async function POST(req: Request) {
 
   const systemMessage = {
     role: 'system' as const,
-    content: `You are a helpful AI assistant for Soi 54, a Thai restaurant in Korea. You help analyze sales data and provide business insights and patterns. Reply in the language the user converes in
+    content: `You are a helpful AI assistant for Soi 54, a Thai restaurant in Korea. You help analyze sales data and provide business insights and patterns.
 
 Use the available tools to fetch data from the database before answering questions. Always use tools to get current data rather than making assumptions.
 
@@ -299,12 +263,12 @@ When presenting data:
 - Highlight important trends or anomalies
 - The restaurant is closed on Sundays, so that data is excluded
 
-Respond in a friendly, professional manner. Keep responses brief but insightful.`,
+Respond in a friendly, professional manner. Keep responses brief but insightful in the users initial language.`,
   }
 
   const allMessages = [systemMessage, ...messages]
 
-  // First API call to get tool calls
+  // First API call to get tool calls (non-streaming)
   const response = await openai.chat.completions.create({
     model: 'gpt-5-mini',
     messages: allMessages,
@@ -314,7 +278,7 @@ Respond in a friendly, professional manner. Keep responses brief but insightful.
 
   const assistantMessage = response.choices[0].message
 
-  // If there are tool calls, execute them
+  // If there are tool calls, execute them and stream the final response
   if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
     const toolResults = await Promise.all(
       assistantMessage.tool_calls.map(async (toolCall: any) => {
@@ -328,21 +292,63 @@ Respond in a friendly, professional manner. Keep responses brief but insightful.
       })
     )
 
-    // Second API call with tool results
-    const finalResponse = await openai.chat.completions.create({
+    // Stream the final response
+    const stream = await openai.chat.completions.create({
       model: 'gpt-5-mini',
       messages: [...allMessages, assistantMessage, ...toolResults],
+      stream: true,
     })
 
-    return Response.json({
-      role: 'assistant',
-      content: finalResponse.choices[0].message.content,
+    // Create a readable stream for the response
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || ''
+          if (content) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`))
+          }
+        }
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     })
   }
 
-  // No tool calls, return direct response
-  return Response.json({
-    role: 'assistant',
-    content: assistantMessage.content,
+  // No tool calls - stream direct response
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-5-mini',
+    messages: allMessages,
+    stream: true,
+  })
+
+  const encoder = new TextEncoder()
+  const readable = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || ''
+        if (content) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`))
+        }
+      }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+      controller.close()
+    },
+  })
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
   })
 }

@@ -42,6 +42,9 @@ export function AIChat({ isOpen, onClose }: AIChatProps) {
     setInput('')
     setIsLoading(true)
 
+    const assistantMessageId = (Date.now() + 1).toString()
+    let messageAdded = false
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -54,23 +57,71 @@ export function AIChat({ isOpen, onClose }: AIChatProps) {
         }),
       })
 
-      const data = await response.json()
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.content || 'Sorry, I could not process that request.',
+      if (!response.ok) {
+        throw new Error('Failed to fetch')
       }
 
-      setMessages((prev) => [...prev, assistantMessage])
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No reader available')
+      }
+
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') continue
+            
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.content) {
+                fullContent += parsed.content
+                
+                // Add message on first content, then update
+                if (!messageAdded) {
+                  setMessages((prev) => [...prev, { id: assistantMessageId, role: 'assistant', content: fullContent }])
+                  messageAdded = true
+                  setIsLoading(false)
+                } else {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessageId ? { ...m, content: fullContent } : m
+                    )
+                  )
+                }
+              }
+            } catch {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      // If no content was streamed, show error
+      if (!fullContent) {
+        setMessages((prev) => [...prev, {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: 'Sorry, I could not process that request.'
+        }])
+      }
     } catch (error) {
       console.error('Chat error:', error)
-      const errorMessage: Message = {
+      setMessages((prev) => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Sorry, there was an error processing your request. Please try again.',
-      }
-      setMessages((prev) => [...prev, errorMessage])
+        content: 'Sorry, there was an error processing your request. Please try again.'
+      }])
     } finally {
       setIsLoading(false)
     }
