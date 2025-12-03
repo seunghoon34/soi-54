@@ -7,6 +7,8 @@ import { RevenueChart } from '@/components/revenue-chart'
 import { TopItemsChart } from '@/components/top-items-chart'
 import { CategoryChart } from '@/components/category-chart'
 import { RecentOrdersTable } from '@/components/recent-orders-table'
+import { AIChat } from '@/components/ai-chat'
+import { Button } from '@/components/ui/button'
 import { DateRange, getDateRange } from '@/lib/date-utils'
 import {
   fetchDashboardMetrics,
@@ -20,13 +22,14 @@ import {
   CategoryData,
   RecentOrder,
 } from '@/lib/dashboard-data'
-import { TrendingUp, ShoppingCart, DollarSign, Package } from 'lucide-react'
+import { TrendingUp, ShoppingCart, DollarSign, Package, Sparkles } from 'lucide-react'
 import { subDays, subMonths } from 'date-fns'
 
 export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<DateRange>('7d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([])
   const [topItems, setTopItems] = useState<TopItem[]>([])
@@ -101,7 +104,16 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold tracking-tight">Soi 54 Dashboard</h1>
             <p className="text-muted-foreground">Restaurant sales and analytics</p>
           </div>
-          <DateRangeFilter selected={selectedRange} onSelect={setSelectedRange} />
+          <div className="flex items-center gap-3">
+            <DateRangeFilter selected={selectedRange} onSelect={setSelectedRange} />
+            <Button
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Assistant
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -181,7 +193,10 @@ export default function DashboardPage() {
             <RecentOrdersTable data={recentOrders} />
           </>
         )}
-        </div>
+      </div>
+
+      {/* AI Chat Sidebar */}
+      <AIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   )
 }
