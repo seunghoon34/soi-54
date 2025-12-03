@@ -21,6 +21,9 @@ export interface RevenueDataPoint {
   date: string
   revenue: number
   orders: number
+  itemsSold: number
+  avgValuePerItem: number
+  topItems: Array<{ name: string; count: number }>
 }
 
 export interface TopItem {
@@ -165,34 +168,97 @@ export async function fetchRevenueData(
   const startDateStr = format(startDate, 'yyyy-MM-dd')
   const endDateStr = format(endDate, 'yyyy-MM-dd')
 
-  const { data, error } = await supabase
+  // Fetch orders with IDs
+  const { data: ordersData, error: ordersError } = await supabase
     .from('orders')
-    .select('order_date, total_amount')
+    .select('id, order_date, total_amount')
     .gte('order_date', startDateStr)
     .lte('order_date', endDateStr)
     .order('order_date', { ascending: true })
 
-  if (error) throw error
+  if (ordersError) throw ordersError
 
-  // Group by date and filter out Sundays
-  const revenueMap = new Map<string, { revenue: number; orders: number }>()
-  data?.forEach((order: any) => {
+  // Filter out Sundays
+  const orders = ordersData?.filter((order: any) => {
     const orderDate = parseISO(order.order_date)
-    // Skip Sundays (day 0)
-    if (getDay(orderDate) === 0) return
+    return getDay(orderDate) !== 0
+  }) || []
+
+  const orderIds = orders.map((o: any) => o.id)
+
+  // Fetch items for these orders with item names
+  let itemsData: any[] = []
+  if (orderIds.length > 0) {
+    const { data, error: itemsError } = await supabase
+      .from('order_items')
+      .select('order_id, item_name, quantity')
+      .in('order_id', orderIds)
+
+    if (itemsError) throw itemsError
+    itemsData = data || []
+  }
+
+  // Create a map of order_id to order_date
+  const orderDateMap = new Map<string, string>()
+  orders.forEach((order: any) => {
+    orderDateMap.set(order.id, order.order_date)
+  })
+
+  // Create a map of order_id to items count
+  const orderItemsMap = new Map<string, number>()
+  itemsData.forEach((item: any) => {
+    const current = orderItemsMap.get(item.order_id) || 0
+    orderItemsMap.set(item.order_id, current + item.quantity)
+  })
+
+  // Group items by date and item name for top item calculation
+  const dateItemsMap = new Map<string, Map<string, number>>()
+  itemsData.forEach((item: any) => {
+    const date = orderDateMap.get(item.order_id)
+    if (!date) return
     
-    const existing = revenueMap.get(order.order_date) || { revenue: 0, orders: 0 }
+    if (!dateItemsMap.has(date)) {
+      dateItemsMap.set(date, new Map<string, number>())
+    }
+    const itemMap = dateItemsMap.get(date)!
+    const current = itemMap.get(item.item_name) || 0
+    itemMap.set(item.item_name, current + item.quantity)
+  })
+
+  // Group by date
+  const revenueMap = new Map<string, { revenue: number; orders: number; itemsSold: number }>()
+  orders.forEach((order: any) => {
+    const existing = revenueMap.get(order.order_date) || { revenue: 0, orders: 0, itemsSold: 0 }
+    const orderItems = orderItemsMap.get(order.id) || 0
     revenueMap.set(order.order_date, {
       revenue: existing.revenue + order.total_amount,
       orders: existing.orders + 1,
+      itemsSold: existing.itemsSold + orderItems,
     })
   })
 
-  return Array.from(revenueMap.entries()).map(([date, { revenue, orders }]) => ({
-    date,
-    revenue,
-    orders,
-  }))
+  return Array.from(revenueMap.entries()).map(([date, { revenue, orders, itemsSold }]) => {
+    // Find top 3 items for this date
+    const itemsForDate = dateItemsMap.get(date)
+    let topItems: Array<{ name: string; count: number }> = []
+    
+    if (itemsForDate && itemsForDate.size > 0) {
+      const sortedItems = Array.from(itemsForDate.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, count]) => ({ name, count }))
+      topItems = sortedItems
+    }
+
+    return {
+      date,
+      revenue,
+      orders,
+      itemsSold,
+      avgValuePerItem: itemsSold > 0 ? Math.round(revenue / itemsSold) : 0,
+      topItems,
+    }
+  })
 }
 
 export async function fetchTopItems(startDate: Date, endDate: Date): Promise<TopItem[]> {

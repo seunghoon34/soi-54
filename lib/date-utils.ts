@@ -87,7 +87,8 @@ export function getDateRange(range: DateRange): DateRangeResult {
   return { startDate, endDate, label, granularity }
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | undefined | null): string {
+  if (amount === undefined || amount === null) return '₩0'
   return `₩${amount.toLocaleString('ko-KR')}`
 }
 

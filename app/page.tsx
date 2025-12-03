@@ -181,7 +181,7 @@ export default function DashboardPage() {
             <RecentOrdersTable data={recentOrders} />
           </>
         )}
-      </div>
+        </div>
     </div>
   )
 }
