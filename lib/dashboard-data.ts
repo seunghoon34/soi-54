@@ -104,10 +104,11 @@ export async function fetchDashboardMetrics(
   // Fetch top item from order_items (still need this for item names)
   const orderIds: string[] = []
   for (const day of currentDays) {
+    if (!day.order_date) continue
     const { data: orders } = await supabase
       .from('orders')
       .select('id')
-      .eq('order_date', day.order_date)
+      .eq('order_date', day.order_date as string)
     orders?.forEach((o: any) => orderIds.push(o.id))
   }
 
@@ -171,11 +172,12 @@ export async function fetchRevenueData(
   const results: RevenueDataPoint[] = []
 
   for (const day of days) {
+    if (!day.order_date) continue
     // Get order IDs for this date
     const { data: orders } = await supabase
       .from('orders')
       .select('id')
-      .eq('order_date', day.order_date)
+      .eq('order_date', day.order_date as string)
 
     const orderIds = orders?.map((o: any) => o.id) || []
 
