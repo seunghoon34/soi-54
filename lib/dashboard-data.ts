@@ -57,94 +57,77 @@ export async function fetchDashboardMetrics(
   const prevStartDateStr = format(previousStartDate, 'yyyy-MM-dd')
   const prevEndDateStr = format(previousEndDate, 'yyyy-MM-dd')
 
-  // Fetch current period orders (excluding Sundays)
-  const { data: allOrders, error: ordersError } = await supabase
-    .from('orders')
-    .select('id, total_amount, order_date')
+  // Fetch current period from daily_revenue view (already aggregated correctly)
+  const { data: dailyData, error: dailyError } = await supabase
+    .from('daily_revenue')
+    .select('*')
     .gte('order_date', startDateStr)
     .lte('order_date', endDateStr)
 
-  if (ordersError) throw ordersError
+  if (dailyError) throw dailyError
 
   // Filter out Sundays
-  const orders = allOrders?.filter((order: any) => {
-    const orderDate = parseISO(order.order_date)
-    return getDay(orderDate) !== 0 // Exclude Sunday (0)
+  const currentDays = dailyData?.filter((day: any) => {
+    const orderDate = parseISO(day.order_date)
+    return getDay(orderDate) !== 0
   }) || []
 
-  // Fetch previous period orders (excluding Sundays)
-  const { data: allPrevOrders, error: prevOrdersError } = await supabase
-    .from('orders')
-    .select('id, total_amount, order_date')
+  // Fetch previous period from daily_revenue view
+  const { data: prevDailyData, error: prevDailyError } = await supabase
+    .from('daily_revenue')
+    .select('*')
     .gte('order_date', prevStartDateStr)
     .lte('order_date', prevEndDateStr)
 
-  if (prevOrdersError) throw prevOrdersError
+  if (prevDailyError) throw prevDailyError
 
   // Filter out Sundays
-  const prevOrders = allPrevOrders?.filter((order: any) => {
-    const orderDate = parseISO(order.order_date)
-    return getDay(orderDate) !== 0 // Exclude Sunday (0)
+  const prevDays = prevDailyData?.filter((day: any) => {
+    const orderDate = parseISO(day.order_date)
+    return getDay(orderDate) !== 0
   }) || []
 
-  const orderIds = orders?.map((o: any) => o.id) || []
-  const prevOrderIds = prevOrders?.map((o: any) => o.id) || []
+  // Calculate metrics from daily_revenue
+  const totalRevenue = currentDays.reduce((sum: number, day: any) => sum + (day.total_revenue || 0), 0)
+  const totalOrders = currentDays.reduce((sum: number, day: any) => sum + (day.order_count || 0), 0)
+  const totalItems = currentDays.reduce((sum: number, day: any) => sum + (day.total_items || 0), 0)
+  const averageSaleValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  const averageValuePerItem = totalItems > 0 ? totalRevenue / totalItems : 0
+  
+  const daysWithOrders = currentDays.length > 0 ? currentDays.length : 1
+  const averageItemsPerDay = totalItems / daysWithOrders
 
-  // Fetch items for current period
-  let currentItems: any[] = []
+  const previousRevenue = prevDays.reduce((sum: number, day: any) => sum + (day.total_revenue || 0), 0)
+  const previousOrders = prevDays.reduce((sum: number, day: any) => sum + (day.order_count || 0), 0)
+  const previousItemsTotal = prevDays.reduce((sum: number, day: any) => sum + (day.total_items || 0), 0)
+
+  // Fetch top item from order_items (still need this for item names)
+  const orderIds: string[] = []
+  for (const day of currentDays) {
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('order_date', day.order_date)
+    orders?.forEach((o: any) => orderIds.push(o.id))
+  }
+
+  let topItem = null
   if (orderIds.length > 0) {
-    const { data, error: itemsError } = await supabase
+    const { data: items } = await supabase
       .from('order_items')
       .select('item_name, quantity')
       .in('order_id', orderIds)
 
-    if (itemsError) throw itemsError
-    currentItems = data || []
-  }
+    const itemQuantities = new Map<string, number>()
+    items?.forEach((item: any) => {
+      const current = itemQuantities.get(item.item_name) || 0
+      itemQuantities.set(item.item_name, current + item.quantity)
+    })
 
-  // Fetch items for previous period
-  let previousItems: any[] = []
-  if (prevOrderIds.length > 0) {
-    const { data, error: prevItemsError } = await supabase
-      .from('order_items')
-      .select('quantity')
-      .in('order_id', prevOrderIds)
-
-    if (prevItemsError) throw prevItemsError
-    previousItems = data || []
-  }
-
-  // Calculate metrics
-  const totalRevenue = orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0
-  const totalOrders = orders?.length || 0
-  const totalItems = currentItems.reduce((sum, item) => sum + item.quantity, 0)
-  const averageSaleValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
-  const averageValuePerItem = totalItems > 0 ? totalRevenue / totalItems : 0
-  
-  // Calculate unique days with orders (not total calendar days)
-  const uniqueOrderDates = new Set(
-    orders?.map((order: any) => order.order_date) || []
-  )
-  
-  // Use actual number of days with orders (excludes closed days like Sundays)
-  const daysWithOrders = uniqueOrderDates.size > 0 ? uniqueOrderDates.size : 1
-  const averageItemsPerDay = totalItems / daysWithOrders
-
-  const previousRevenue = prevOrders?.reduce((sum, order) => sum + order.total_amount, 0) || 0
-  const previousOrders = prevOrders?.length || 0
-  const previousItemsTotal = previousItems.reduce((sum, item) => sum + item.quantity, 0)
-
-  // Calculate top item
-  const itemQuantities = new Map<string, number>()
-  currentItems.forEach((item: any) => {
-    const current = itemQuantities.get(item.item_name) || 0
-    itemQuantities.set(item.item_name, current + item.quantity)
-  })
-
-  let topItem = null
-  if (itemQuantities.size > 0) {
-    const [name, quantity] = Array.from(itemQuantities.entries()).sort((a, b) => b[1] - a[1])[0]
-    topItem = { name, quantity }
+    if (itemQuantities.size > 0) {
+      const [name, quantity] = Array.from(itemQuantities.entries()).sort((a, b) => b[1] - a[1])[0]
+      topItem = { name, quantity }
+    }
   }
 
   return {
@@ -168,97 +151,68 @@ export async function fetchRevenueData(
   const startDateStr = format(startDate, 'yyyy-MM-dd')
   const endDateStr = format(endDate, 'yyyy-MM-dd')
 
-  // Fetch orders with IDs
-  const { data: ordersData, error: ordersError } = await supabase
-    .from('orders')
-    .select('id, order_date, total_amount')
+  // Fetch from daily_revenue view (has correct total_items)
+  const { data: dailyData, error: dailyError } = await supabase
+    .from('daily_revenue')
+    .select('*')
     .gte('order_date', startDateStr)
     .lte('order_date', endDateStr)
     .order('order_date', { ascending: true })
 
-  if (ordersError) throw ordersError
+  if (dailyError) throw dailyError
 
   // Filter out Sundays
-  const orders = ordersData?.filter((order: any) => {
-    const orderDate = parseISO(order.order_date)
+  const days = dailyData?.filter((day: any) => {
+    const orderDate = parseISO(day.order_date)
     return getDay(orderDate) !== 0
   }) || []
 
-  const orderIds = orders.map((o: any) => o.id)
+  // For each day, get top items from order_items
+  const results: RevenueDataPoint[] = []
 
-  // Fetch items for these orders with item names
-  let itemsData: any[] = []
-  if (orderIds.length > 0) {
-    const { data, error: itemsError } = await supabase
-      .from('order_items')
-      .select('order_id, item_name, quantity')
-      .in('order_id', orderIds)
+  for (const day of days) {
+    // Get order IDs for this date
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('order_date', day.order_date)
 
-    if (itemsError) throw itemsError
-    itemsData = data || []
-  }
+    const orderIds = orders?.map((o: any) => o.id) || []
 
-  // Create a map of order_id to order_date
-  const orderDateMap = new Map<string, string>()
-  orders.forEach((order: any) => {
-    orderDateMap.set(order.id, order.order_date)
-  })
-
-  // Create a map of order_id to items count
-  const orderItemsMap = new Map<string, number>()
-  itemsData.forEach((item: any) => {
-    const current = orderItemsMap.get(item.order_id) || 0
-    orderItemsMap.set(item.order_id, current + item.quantity)
-  })
-
-  // Group items by date and item name for top item calculation
-  const dateItemsMap = new Map<string, Map<string, number>>()
-  itemsData.forEach((item: any) => {
-    const date = orderDateMap.get(item.order_id)
-    if (!date) return
-    
-    if (!dateItemsMap.has(date)) {
-      dateItemsMap.set(date, new Map<string, number>())
-    }
-    const itemMap = dateItemsMap.get(date)!
-    const current = itemMap.get(item.item_name) || 0
-    itemMap.set(item.item_name, current + item.quantity)
-  })
-
-  // Group by date
-  const revenueMap = new Map<string, { revenue: number; orders: number; itemsSold: number }>()
-  orders.forEach((order: any) => {
-    const existing = revenueMap.get(order.order_date) || { revenue: 0, orders: 0, itemsSold: 0 }
-    const orderItems = orderItemsMap.get(order.id) || 0
-    revenueMap.set(order.order_date, {
-      revenue: existing.revenue + order.total_amount,
-      orders: existing.orders + 1,
-      itemsSold: existing.itemsSold + orderItems,
-    })
-  })
-
-  return Array.from(revenueMap.entries()).map(([date, { revenue, orders, itemsSold }]) => {
-    // Find top 3 items for this date
-    const itemsForDate = dateItemsMap.get(date)
+    // Get top items for this date
     let topItems: Array<{ name: string; count: number }> = []
-    
-    if (itemsForDate && itemsForDate.size > 0) {
-      const sortedItems = Array.from(itemsForDate.entries())
+    if (orderIds.length > 0) {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('item_name, quantity')
+        .in('order_id', orderIds)
+
+      const itemMap = new Map<string, number>()
+      items?.forEach((item: any) => {
+        const current = itemMap.get(item.item_name) || 0
+        itemMap.set(item.item_name, current + item.quantity)
+      })
+
+      topItems = Array.from(itemMap.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
         .map(([name, count]) => ({ name, count }))
-      topItems = sortedItems
     }
 
-    return {
-      date,
+    const itemsSold = day.total_items || 0
+    const revenue = day.total_revenue || 0
+
+    results.push({
+      date: day.order_date,
       revenue,
-      orders,
+      orders: day.order_count || 0,
       itemsSold,
       avgValuePerItem: itemsSold > 0 ? Math.round(revenue / itemsSold) : 0,
       topItems,
-    }
-  })
+    })
+  }
+
+  return results
 }
 
 export async function fetchTopItems(startDate: Date, endDate: Date): Promise<TopItem[]> {
@@ -360,18 +314,22 @@ export async function fetchRecentOrders(limit: number = 10): Promise<RecentOrder
     .from('orders')
     .select('id, order_date, total_amount, item_count, receipt_filename')
     .order('order_date', { ascending: false })
-    .limit(limit)
+    .limit(limit * 2) // Fetch more to account for Sunday filtering
 
   if (error) throw error
 
-  return (
-    data?.map((order: any) => ({
-      id: order.id,
-      orderDate: order.order_date,
-      totalAmount: order.total_amount,
-      itemCount: order.item_count,
-      receiptFilename: order.receipt_filename,
-    })) || []
-  )
+  // Filter out Sundays
+  const filteredOrders = data?.filter((order: any) => {
+    const orderDate = parseISO(order.order_date)
+    return getDay(orderDate) !== 0
+  }).slice(0, limit) || []
+
+  return filteredOrders.map((order: any) => ({
+    id: order.id,
+    orderDate: order.order_date,
+    totalAmount: order.total_amount,
+    itemCount: order.item_count || 0,
+    receiptFilename: order.receipt_filename,
+  }))
 }
 
