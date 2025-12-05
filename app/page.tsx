@@ -9,6 +9,7 @@ import { CategoryChart } from '@/components/category-chart'
 import { RecentOrdersTable } from '@/components/recent-orders-table'
 import { AIChat } from '@/components/ai-chat'
 import { ReceiptUpload } from '@/components/receipt-upload'
+import { TransactionHistoryUpload } from '@/components/transaction-history-upload'
 import { Button } from '@/components/ui/button'
 import { DateRange, getDateRange } from '@/lib/date-utils'
 import {
@@ -23,8 +24,8 @@ import {
   CategoryData,
   RecentOrder,
 } from '@/lib/dashboard-data'
-import { TrendingUp, ShoppingCart, DollarSign, Package, Sparkles, Upload } from 'lucide-react'
-import { subDays, subMonths } from 'date-fns'
+import { TrendingUp, DollarSign, Package, Sparkles, Upload, Receipt, Sun, Moon } from 'lucide-react'
+import { subDays } from 'date-fns'
 
 export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<DateRange>('7d')
@@ -32,6 +33,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const [isTransactionHistoryOpen, setIsTransactionHistoryOpen] = useState(false)
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([])
   const [topItems, setTopItems] = useState<TopItem[]>([])
@@ -85,15 +87,39 @@ export default function DashboardPage() {
       : 0
     : 0
 
-  const ordersChange = metrics
-    ? metrics.previousOrders > 0
-      ? ((metrics.totalOrders - metrics.previousOrders) / metrics.previousOrders) * 100
-      : 0
-    : 0
-
   const itemsChange = metrics
     ? metrics.previousItems > 0
       ? ((metrics.totalItems - metrics.previousItems) / metrics.previousItems) * 100
+      : 0
+    : 0
+
+  const lunchRevenueChange = metrics
+    ? metrics.previousAverageLunchRevenue > 0
+      ? ((metrics.averageLunchRevenue - metrics.previousAverageLunchRevenue) / metrics.previousAverageLunchRevenue) * 100
+      : 0
+    : 0
+
+  const dinnerRevenueChange = metrics
+    ? metrics.previousAverageDinnerRevenue > 0
+      ? ((metrics.averageDinnerRevenue - metrics.previousAverageDinnerRevenue) / metrics.previousAverageDinnerRevenue) * 100
+      : 0
+    : 0
+
+  const avgSaleValueChange = metrics
+    ? metrics.previousAverageSaleValue > 0
+      ? ((metrics.averageSaleValue - metrics.previousAverageSaleValue) / metrics.previousAverageSaleValue) * 100
+      : 0
+    : 0
+
+  const avgValuePerItemChange = metrics
+    ? metrics.previousAverageValuePerItem > 0
+      ? ((metrics.averageValuePerItem - metrics.previousAverageValuePerItem) / metrics.previousAverageValuePerItem) * 100
+      : 0
+    : 0
+
+  const avgItemsPerDayChange = metrics
+    ? metrics.previousAverageItemsPerDay > 0
+      ? ((metrics.averageItemsPerDay - metrics.previousAverageItemsPerDay) / metrics.previousAverageItemsPerDay) * 100
       : 0
     : 0
 
@@ -113,7 +139,15 @@ export default function DashboardPage() {
               variant="outline"
             >
               <Upload className="w-4 h-4 mr-2" />
-              Upload Receipt
+              POS Receipt
+            </Button>
+            <Button
+              onClick={() => setIsTransactionHistoryOpen(true)}
+              variant="outline"
+              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              Transaction History
             </Button>
             <Button
               onClick={() => setIsChatOpen(!isChatOpen)}
@@ -148,7 +182,7 @@ export default function DashboardPage() {
         ) : !error && (
           <>
             {/* Metrics Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 title="Total Revenue"
                 value={metrics?.totalRevenue || 0}
@@ -164,21 +198,38 @@ export default function DashboardPage() {
                 icon={<Package className="h-4 w-4" />}
               />
               <MetricCard
+                title="Avg Lunch Revenue"
+                value={Math.round(metrics?.averageLunchRevenue || 0)}
+                format="currency"
+                change={metrics?.previousLunchDays ? lunchRevenueChange : undefined}
+                icon={<Sun className="h-4 w-4 text-orange-500" />}
+              />
+              <MetricCard
+                title="Avg Dinner Revenue"
+                value={Math.round(metrics?.averageDinnerRevenue || 0)}
+                format="currency"
+                change={metrics?.previousDinnerDays ? dinnerRevenueChange : undefined}
+                icon={<Moon className="h-4 w-4 text-purple-500" />}
+              />
+              <MetricCard
                 title="Average Sale Value"
                 value={Math.round(metrics?.averageSaleValue || 0)}
                 format="currency"
+                change={avgSaleValueChange}
                 icon={<TrendingUp className="h-4 w-4" />}
               />
               <MetricCard
                 title="Avg Value per Item"
                 value={Math.round(metrics?.averageValuePerItem || 0)}
                 format="currency"
+                change={avgValuePerItemChange}
                 icon={<DollarSign className="h-4 w-4" />}
               />
               <MetricCard
                 title="Avg Items per Day"
                 value={Math.round(metrics?.averageItemsPerDay || 0)}
                 format="number"
+                change={avgItemsPerDayChange}
                 icon={<Package className="h-4 w-4" />}
               />
               <MetricCard
@@ -211,6 +262,15 @@ export default function DashboardPage() {
       <ReceiptUpload
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
+        onSuccess={() => {
+          loadDashboardData()
+        }}
+      />
+
+      {/* Transaction History Upload Modal */}
+      <TransactionHistoryUpload
+        isOpen={isTransactionHistoryOpen}
+        onClose={() => setIsTransactionHistoryOpen(false)}
         onSuccess={() => {
           loadDashboardData()
         }}

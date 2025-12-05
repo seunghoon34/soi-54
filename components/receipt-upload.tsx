@@ -293,11 +293,16 @@ export function ReceiptUpload({ isOpen, onClose, onSuccess }: ReceiptUploadProps
 
           {step === 'preview' && receiptData && (
             <div className="space-y-4">
-              {/* Date Display */}
+              {/* Date Picker - Editable */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium">{selectedDate}</span>
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-auto"
+                  />
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setStep('upload')}>
                   ← Back

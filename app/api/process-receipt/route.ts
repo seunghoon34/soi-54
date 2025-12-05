@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     - Read the Korean text CAREFULLY and accurately
     - This is a Thai restaurant. Common menu items include:
       - 꾸어이띠어우누아 (kuaytiew nua - beef noodle soup)
-      - 꾸어이띠어우똠얌 (kuaytiew tom yum - NOT 꿍얌 or 꿍얌)
+      - 꾸어이띠어우똠얌 (kuaytiew tom yum - NOT 꿍얌 or 꿍얌 or 까암 or etc, anything that is not 꾸어이띠어우누아)
       - 팟타이꿍 (pad thai kung - NOT 팟타이꽁)
       - 솜땀타이 (som tam thai - NOT 쏨땀타이)
       - 똠얌꿍 (tom yum kung)

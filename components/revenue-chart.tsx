@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { formatCurrency, formatShortDate } from '@/lib/date-utils'
 import { RevenueDataPoint } from '@/lib/dashboard-data'
+import { Sun, Moon, TrendingUp } from 'lucide-react'
 
 interface RevenueChartProps {
   data: RevenueDataPoint[]
@@ -23,9 +25,30 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
         <p className="font-semibold text-gray-900 mb-2">{label}</p>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between gap-3">
-            <span className="text-gray-600">Revenue:</span>
+            <span className="text-gray-600">Total Revenue:</span>
             <span className="font-medium text-emerald-600">{formatCurrency(data.revenue)}</span>
           </div>
+          {(data.lunchRevenue !== undefined || data.dinnerRevenue !== undefined) && (
+            <>
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-600 flex items-center gap-1">
+                  <Sun className="w-3 h-3 text-orange-500" /> Lunch:
+                </span>
+                <span className="font-medium text-orange-600">
+                  {data.lunchRevenue !== undefined ? formatCurrency(data.lunchRevenue) : '-'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-600 flex items-center gap-1">
+                  <Moon className="w-3 h-3 text-purple-500" /> Dinner:
+                </span>
+                <span className="font-medium text-purple-600">
+                  {data.dinnerRevenue !== undefined ? formatCurrency(data.dinnerRevenue) : '-'}
+                </span>
+              </div>
+            </>
+          )}
+          <div className="border-t border-gray-200 my-1.5"></div>
           <div className="flex justify-between gap-3">
             <span className="text-gray-600">Items Sold:</span>
             <span className="font-medium">{data.itemsSold}</span>
@@ -58,19 +81,72 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function RevenueChart({ data }: RevenueChartProps) {
+  const [showTotal, setShowTotal] = useState(true)
+  const [showLunch, setShowLunch] = useState(true)
+  const [showDinner, setShowDinner] = useState(true)
+
   const chartData = data.map((point) => ({
     date: formatShortDate(point.date),
     revenue: point.revenue,
+    lunchRevenue: point.lunchRevenue,
+    dinnerRevenue: point.dinnerRevenue,
     orders: point.orders,
     itemsSold: point.itemsSold,
     avgValuePerItem: point.avgValuePerItem,
     topItems: point.topItems,
   }))
 
+  // Check if we have any lunch/dinner data
+  const hasLunchDinnerData = data.some(d => d.lunchRevenue !== undefined || d.dinnerRevenue !== undefined)
+
   return (
     <Card className="col-span-full">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle>Revenue Trend</CardTitle>
+        <div className="flex items-center gap-3">
+          {/* Total Toggle */}
+          <button
+            onClick={() => setShowTotal(!showTotal)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+              showTotal
+                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                : 'bg-gray-100 text-gray-400 border border-gray-200'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            Total
+          </button>
+          
+          {/* Lunch Toggle */}
+          {hasLunchDinnerData && (
+            <button
+              onClick={() => setShowLunch(!showLunch)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                showLunch
+                  ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                  : 'bg-gray-100 text-gray-400 border border-gray-200'
+              }`}
+            >
+              <Sun className="w-3.5 h-3.5" />
+              Lunch
+            </button>
+          )}
+          
+          {/* Dinner Toggle */}
+          {hasLunchDinnerData && (
+            <button
+              onClick={() => setShowDinner(!showDinner)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                showDinner
+                  ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                  : 'bg-gray-100 text-gray-400 border border-gray-200'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5" />
+              Dinner
+            </button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
@@ -87,14 +163,47 @@ export function RevenueChart({ data }: RevenueChartProps) {
               tickFormatter={(value) => `₩${(value / 1000).toFixed(0)}K`}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Line
-              type="monotone"
-              dataKey="revenue"
-              stroke="#10b981"
-              strokeWidth={3}
-              dot={{ fill: '#10b981', r: 4 }}
-              activeDot={{ r: 6 }}
-            />
+            
+            {/* Total Revenue Line */}
+            {showTotal && (
+              <Line
+                type="monotone"
+                dataKey="revenue"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ fill: '#10b981', r: 4 }}
+                activeDot={{ r: 6 }}
+                name="Total"
+              />
+            )}
+            
+            {/* Lunch Revenue Line */}
+            {showLunch && hasLunchDinnerData && (
+              <Line
+                type="monotone"
+                dataKey="lunchRevenue"
+                stroke="#f97316"
+                strokeWidth={2}
+                dot={{ fill: '#f97316', r: 3 }}
+                activeDot={{ r: 5 }}
+                name="Lunch"
+                connectNulls
+              />
+            )}
+            
+            {/* Dinner Revenue Line */}
+            {showDinner && hasLunchDinnerData && (
+              <Line
+                type="monotone"
+                dataKey="dinnerRevenue"
+                stroke="#a855f7"
+                strokeWidth={2}
+                dot={{ fill: '#a855f7', r: 3 }}
+                activeDot={{ r: 5 }}
+                name="Dinner"
+                connectNulls
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

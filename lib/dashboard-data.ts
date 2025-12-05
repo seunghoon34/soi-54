@@ -15,6 +15,17 @@ export interface DashboardMetrics {
   previousRevenue: number
   previousOrders: number
   previousItems: number
+  previousAverageSaleValue: number
+  previousAverageValuePerItem: number
+  previousAverageItemsPerDay: number
+  averageLunchRevenue: number
+  averageDinnerRevenue: number
+  lunchDays: number
+  dinnerDays: number
+  previousAverageLunchRevenue: number
+  previousAverageDinnerRevenue: number
+  previousLunchDays: number
+  previousDinnerDays: number
 }
 
 export interface RevenueDataPoint {
@@ -24,6 +35,8 @@ export interface RevenueDataPoint {
   itemsSold: number
   avgValuePerItem: number
   topItems: Array<{ name: string; count: number }>
+  lunchRevenue?: number
+  dinnerRevenue?: number
 }
 
 export interface TopItem {
@@ -100,6 +113,10 @@ export async function fetchDashboardMetrics(
   const previousRevenue = prevDays.reduce((sum: number, day: any) => sum + (day.total_revenue || 0), 0)
   const previousOrders = prevDays.reduce((sum: number, day: any) => sum + (day.order_count || 0), 0)
   const previousItemsTotal = prevDays.reduce((sum: number, day: any) => sum + (day.total_items || 0), 0)
+  const previousAverageSaleValue = previousOrders > 0 ? previousRevenue / previousOrders : 0
+  const previousAverageValuePerItem = previousItemsTotal > 0 ? previousRevenue / previousItemsTotal : 0
+  const prevDaysWithOrders = prevDays.length > 0 ? prevDays.length : 1
+  const previousAverageItemsPerDay = previousItemsTotal / prevDaysWithOrders
 
   // Fetch top item from order_items (still need this for item names)
   const orderIds: string[] = []
@@ -131,6 +148,54 @@ export async function fetchDashboardMetrics(
     }
   }
 
+  // Fetch lunch/dinner revenue splits (current period)
+  const { data: revenueSplits, error: splitsError } = await supabase
+    .from('daily_revenue_splits')
+    .select('*')
+    .gte('business_date', startDateStr)
+    .lte('business_date', endDateStr)
+
+  if (splitsError) console.error('Error fetching revenue splits:', splitsError)
+
+  // Fetch lunch/dinner revenue splits (previous period)
+  const { data: prevRevenueSplits, error: prevSplitsError } = await supabase
+    .from('daily_revenue_splits')
+    .select('*')
+    .gte('business_date', prevStartDateStr)
+    .lte('business_date', prevEndDateStr)
+
+  if (prevSplitsError) console.error('Error fetching previous revenue splits:', prevSplitsError)
+
+  // Filter out Sundays from revenue splits (current)
+  const validSplits = revenueSplits?.filter((split: any) => {
+    const businessDate = parseISO(split.business_date)
+    return getDay(businessDate) !== 0
+  }) || []
+
+  // Filter out Sundays from revenue splits (previous)
+  const prevValidSplits = prevRevenueSplits?.filter((split: any) => {
+    const businessDate = parseISO(split.business_date)
+    return getDay(businessDate) !== 0
+  }) || []
+
+  // Current period lunch/dinner
+  const totalLunchRevenue = validSplits.reduce((sum: number, split: any) => sum + (split.lunch_revenue || 0), 0)
+  const totalDinnerRevenue = validSplits.reduce((sum: number, split: any) => sum + (split.dinner_revenue || 0), 0)
+  const lunchDays = validSplits.filter((split: any) => split.lunch_revenue > 0).length
+  const dinnerDays = validSplits.filter((split: any) => split.dinner_revenue > 0).length
+  
+  const averageLunchRevenue = lunchDays > 0 ? totalLunchRevenue / lunchDays : 0
+  const averageDinnerRevenue = dinnerDays > 0 ? totalDinnerRevenue / dinnerDays : 0
+
+  // Previous period lunch/dinner
+  const prevTotalLunchRevenue = prevValidSplits.reduce((sum: number, split: any) => sum + (split.lunch_revenue || 0), 0)
+  const prevTotalDinnerRevenue = prevValidSplits.reduce((sum: number, split: any) => sum + (split.dinner_revenue || 0), 0)
+  const previousLunchDays = prevValidSplits.filter((split: any) => split.lunch_revenue > 0).length
+  const previousDinnerDays = prevValidSplits.filter((split: any) => split.dinner_revenue > 0).length
+  
+  const previousAverageLunchRevenue = previousLunchDays > 0 ? prevTotalLunchRevenue / previousLunchDays : 0
+  const previousAverageDinnerRevenue = previousDinnerDays > 0 ? prevTotalDinnerRevenue / previousDinnerDays : 0
+
   return {
     totalRevenue,
     totalOrders,
@@ -142,6 +207,17 @@ export async function fetchDashboardMetrics(
     previousRevenue,
     previousOrders,
     previousItems: previousItemsTotal,
+    previousAverageSaleValue,
+    previousAverageValuePerItem,
+    previousAverageItemsPerDay,
+    averageLunchRevenue,
+    averageDinnerRevenue,
+    lunchDays,
+    dinnerDays,
+    previousAverageLunchRevenue,
+    previousAverageDinnerRevenue,
+    previousLunchDays,
+    previousDinnerDays,
   }
 }
 
@@ -161,6 +237,22 @@ export async function fetchRevenueData(
     .order('order_date', { ascending: true })
 
   if (dailyError) throw dailyError
+
+  // Fetch lunch/dinner revenue splits
+  const { data: revenueSplits } = await supabase
+    .from('daily_revenue_splits')
+    .select('business_date, lunch_revenue, dinner_revenue')
+    .gte('business_date', startDateStr)
+    .lte('business_date', endDateStr)
+
+  // Create a map of date -> lunch/dinner revenue
+  const splitsMap = new Map<string, { lunch: number; dinner: number }>()
+  revenueSplits?.forEach((split: any) => {
+    splitsMap.set(split.business_date, {
+      lunch: split.lunch_revenue || 0,
+      dinner: split.dinner_revenue || 0,
+    })
+  })
 
   // Filter out Sundays
   const days = dailyData?.filter((day: any) => {
@@ -203,6 +295,7 @@ export async function fetchRevenueData(
 
     const itemsSold = day.total_items || 0
     const revenue = day.total_revenue || 0
+    const splits = splitsMap.get(day.order_date)
 
     results.push({
       date: day.order_date,
@@ -211,6 +304,8 @@ export async function fetchRevenueData(
       itemsSold,
       avgValuePerItem: itemsSold > 0 ? Math.round(revenue / itemsSold) : 0,
       topItems,
+      lunchRevenue: splits?.lunch,
+      dinnerRevenue: splits?.dinner,
     })
   }
 

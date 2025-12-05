@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_revenue_splits: {
+        Row: {
+          business_date: string
+          created_at: string | null
+          dinner_revenue: number
+          dinner_transaction_count: number
+          id: string
+          lunch_revenue: number
+          lunch_transaction_count: number
+          processed_at: string | null
+          receipt_filename: string | null
+          total_revenue: number
+          total_transaction_count: number
+        }
+        Insert: {
+          business_date: string
+          created_at?: string | null
+          dinner_revenue?: number
+          dinner_transaction_count?: number
+          id?: string
+          lunch_revenue?: number
+          lunch_transaction_count?: number
+          processed_at?: string | null
+          receipt_filename?: string | null
+          total_revenue?: number
+          total_transaction_count?: number
+        }
+        Update: {
+          business_date?: string
+          created_at?: string | null
+          dinner_revenue?: number
+          dinner_transaction_count?: number
+          id?: string
+          lunch_revenue?: number
+          lunch_transaction_count?: number
+          processed_at?: string | null
+          receipt_filename?: string | null
+          total_revenue?: number
+          total_transaction_count?: number
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           category: string | null

@@ -9,9 +9,10 @@ interface MetricCardProps {
   change?: number
   format?: 'currency' | 'number' | 'text'
   icon?: React.ReactNode
+  subtitle?: string
 }
 
-export function MetricCard({ title, value, change, format = 'number', icon }: MetricCardProps) {
+export function MetricCard({ title, value, change, format = 'number', icon, subtitle }: MetricCardProps) {
   const formattedValue =
     format === 'currency' && typeof value === 'number'
       ? formatCurrency(value)
@@ -47,6 +48,9 @@ export function MetricCard({ title, value, change, format = 'number', icon }: Me
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{formattedValue}</div>
+        {subtitle && (
+          <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
+        )}
         {change !== undefined && (
           <div className="mt-2 flex items-center gap-1">
             <Badge variant="secondary" className={`${changeColor} flex items-center gap-1`}>
