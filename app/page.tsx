@@ -8,6 +8,7 @@ import { TopItemsChart } from '@/components/top-items-chart'
 import { CategoryChart } from '@/components/category-chart'
 import { RecentOrdersTable } from '@/components/recent-orders-table'
 import { AIChat } from '@/components/ai-chat'
+import { ReceiptUpload } from '@/components/receipt-upload'
 import { Button } from '@/components/ui/button'
 import { DateRange, getDateRange } from '@/lib/date-utils'
 import {
@@ -22,7 +23,7 @@ import {
   CategoryData,
   RecentOrder,
 } from '@/lib/dashboard-data'
-import { TrendingUp, ShoppingCart, DollarSign, Package, Sparkles } from 'lucide-react'
+import { TrendingUp, ShoppingCart, DollarSign, Package, Sparkles, Upload } from 'lucide-react'
 import { subDays, subMonths } from 'date-fns'
 
 export default function DashboardPage() {
@@ -30,6 +31,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([])
   const [topItems, setTopItems] = useState<TopItem[]>([])
@@ -106,6 +108,13 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <DateRangeFilter selected={selectedRange} onSelect={setSelectedRange} />
+            <Button
+              onClick={() => setIsUploadOpen(true)}
+              variant="outline"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Receipt
+            </Button>
             <Button
               onClick={() => setIsChatOpen(!isChatOpen)}
               className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
@@ -197,6 +206,15 @@ export default function DashboardPage() {
 
       {/* AI Chat Sidebar */}
       <AIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+
+      {/* Receipt Upload Modal */}
+      <ReceiptUpload
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onSuccess={() => {
+          loadDashboardData()
+        }}
+      />
     </div>
   )
 }
