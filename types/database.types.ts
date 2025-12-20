@@ -56,6 +56,33 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_sales: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          sale_date: string
+          total_amount: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          sale_date: string
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          sale_date?: string
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           category: string | null
@@ -301,5 +328,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-

@@ -59,6 +59,16 @@ export interface RecentOrder {
   receiptFilename: string
 }
 
+export interface DeliverySalesData {
+  totalDeliverySales: number
+  previousDeliverySales: number
+  dailyDeliverySales: Map<string, number>
+  averageDeliverySales: number
+  previousAverageDeliverySales: number
+  deliveryDays: number
+  previousDeliveryDays: number
+}
+
 export async function fetchDashboardMetrics(
   startDate: Date,
   endDate: Date,
@@ -428,5 +438,75 @@ export async function fetchRecentOrders(limit: number = 10): Promise<RecentOrder
     itemCount: order.item_count || 0,
     receiptFilename: order.receipt_filename,
   }))
+}
+
+export async function fetchDeliverySales(
+  startDate: Date,
+  endDate: Date,
+  previousStartDate: Date,
+  previousEndDate: Date
+): Promise<DeliverySalesData> {
+  const startDateStr = format(startDate, 'yyyy-MM-dd')
+  const endDateStr = format(endDate, 'yyyy-MM-dd')
+  const prevStartDateStr = format(previousStartDate, 'yyyy-MM-dd')
+  const prevEndDateStr = format(previousEndDate, 'yyyy-MM-dd')
+
+  // Fetch current period delivery sales
+  const { data: currentData, error: currentError } = await supabase
+    .from('delivery_sales')
+    .select('*')
+    .gte('sale_date', startDateStr)
+    .lte('sale_date', endDateStr)
+
+  if (currentError) throw currentError
+
+  // Filter out Sundays from current period
+  const currentDays = currentData?.filter((day: any) => {
+    const saleDate = parseISO(day.sale_date)
+    return getDay(saleDate) !== 0
+  }) || []
+
+  // Fetch previous period delivery sales
+  const { data: prevData, error: prevError } = await supabase
+    .from('delivery_sales')
+    .select('*')
+    .gte('sale_date', prevStartDateStr)
+    .lte('sale_date', prevEndDateStr)
+
+  if (prevError) throw prevError
+
+  // Filter out Sundays from previous period
+  const prevDays = prevData?.filter((day: any) => {
+    const saleDate = parseISO(day.sale_date)
+    return getDay(saleDate) !== 0
+  }) || []
+
+  // Calculate totals
+  const totalDeliverySales = currentDays.reduce((sum: number, day: any) => sum + (day.total_amount || 0), 0)
+  const previousDeliverySales = prevDays.reduce((sum: number, day: any) => sum + (day.total_amount || 0), 0)
+
+  // Count days with delivery sales
+  const deliveryDays = currentDays.filter((day: any) => day.total_amount > 0).length
+  const previousDeliveryDays = prevDays.filter((day: any) => day.total_amount > 0).length
+
+  // Calculate averages
+  const averageDeliverySales = deliveryDays > 0 ? totalDeliverySales / deliveryDays : 0
+  const previousAverageDeliverySales = previousDeliveryDays > 0 ? previousDeliverySales / previousDeliveryDays : 0
+
+  // Create a map of date -> delivery sales for chart
+  const dailyDeliverySales = new Map<string, number>()
+  currentDays.forEach((day: any) => {
+    dailyDeliverySales.set(day.sale_date, day.total_amount || 0)
+  })
+
+  return {
+    totalDeliverySales,
+    previousDeliverySales,
+    dailyDeliverySales,
+    averageDeliverySales,
+    previousAverageDeliverySales,
+    deliveryDays,
+    previousDeliveryDays,
+  }
 }
 

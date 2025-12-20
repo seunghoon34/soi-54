@@ -10,6 +10,7 @@ import { RecentOrdersTable } from '@/components/recent-orders-table'
 import { AIChat } from '@/components/ai-chat'
 import { ReceiptUpload } from '@/components/receipt-upload'
 import { TransactionHistoryUpload } from '@/components/transaction-history-upload'
+import { DeliverySalesInput } from '@/components/delivery-sales-input'
 import { Button } from '@/components/ui/button'
 import { DateRange, getDateRange } from '@/lib/date-utils'
 import {
@@ -18,13 +19,15 @@ import {
   fetchTopItems,
   fetchCategoryData,
   fetchRecentOrders,
+  fetchDeliverySales,
   DashboardMetrics,
   RevenueDataPoint,
   TopItem,
   CategoryData,
   RecentOrder,
+  DeliverySalesData,
 } from '@/lib/dashboard-data'
-import { TrendingUp, DollarSign, Package, Sparkles, Upload, Receipt, Sun, Moon } from 'lucide-react'
+import { TrendingUp, DollarSign, Package, Sparkles, Upload, Receipt, Sun, Moon, Truck } from 'lucide-react'
 import { subDays } from 'date-fns'
 
 export default function DashboardPage() {
@@ -34,11 +37,13 @@ export default function DashboardPage() {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [isTransactionHistoryOpen, setIsTransactionHistoryOpen] = useState(false)
+  const [isDeliverySalesOpen, setIsDeliverySalesOpen] = useState(false)
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([])
   const [topItems, setTopItems] = useState<TopItem[]>([])
   const [categoryData, setCategoryData] = useState<CategoryData[]>([])
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
+  const [deliverySalesData, setDeliverySalesData] = useState<DeliverySalesData | null>(null)
 
   useEffect(() => {
     loadDashboardData()
@@ -58,21 +63,23 @@ export default function DashboardPage() {
       console.log('Fetching data from', startDate, 'to', endDate)
 
       // Fetch all data in parallel
-      const [metricsData, revenue, items, categories, orders] = await Promise.all([
+      const [metricsData, revenue, items, categories, orders, deliverySales] = await Promise.all([
         fetchDashboardMetrics(startDate, endDate, previousStartDate, previousEndDate),
         fetchRevenueData(startDate, endDate),
         fetchTopItems(startDate, endDate),
         fetchCategoryData(startDate, endDate),
         fetchRecentOrders(10),
+        fetchDeliverySales(startDate, endDate, previousStartDate, previousEndDate),
       ])
 
-      console.log('Data fetched successfully:', { metricsData, revenue, items, categories, orders })
+      console.log('Data fetched successfully:', { metricsData, revenue, items, categories, orders, deliverySales })
 
       setMetrics(metricsData)
       setRevenueData(revenue)
       setTopItems(items)
       setCategoryData(categories)
       setRecentOrders(orders)
+      setDeliverySalesData(deliverySales)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError(error instanceof Error ? error.message : 'Failed to load dashboard data')
@@ -123,6 +130,48 @@ export default function DashboardPage() {
       : 0
     : 0
 
+  const deliverySalesChange = deliverySalesData
+    ? deliverySalesData.previousDeliverySales > 0
+      ? ((deliverySalesData.totalDeliverySales - deliverySalesData.previousDeliverySales) / deliverySalesData.previousDeliverySales) * 100
+      : 0
+    : 0
+
+  const avgDeliverySalesChange = deliverySalesData
+    ? deliverySalesData.previousAverageDeliverySales > 0
+      ? ((deliverySalesData.averageDeliverySales - deliverySalesData.previousAverageDeliverySales) / deliverySalesData.previousAverageDeliverySales) * 100
+      : 0
+    : 0
+
+  // Total revenue including delivery sales
+  const totalCombinedRevenue = (metrics?.totalRevenue || 0) + (deliverySalesData?.totalDeliverySales || 0)
+  const previousCombinedRevenue = (metrics?.previousRevenue || 0) + (deliverySalesData?.previousDeliverySales || 0)
+  const combinedRevenueChange = previousCombinedRevenue > 0
+    ? ((totalCombinedRevenue - previousCombinedRevenue) / previousCombinedRevenue) * 100
+    : 0
+
+  // Lunch to Dinner ratio (based on average daily revenue)
+  const totalLunchRevenue = (metrics?.averageLunchRevenue || 0) * (metrics?.lunchDays || 0)
+  const totalDinnerRevenue = (metrics?.averageDinnerRevenue || 0) * (metrics?.dinnerDays || 0)
+  const lunchDinnerTotal = totalLunchRevenue + totalDinnerRevenue
+  const lunchPercent = lunchDinnerTotal > 0 ? Math.round((totalLunchRevenue / lunchDinnerTotal) * 100) : 0
+  const dinnerPercent = lunchDinnerTotal > 0 ? Math.round((totalDinnerRevenue / lunchDinnerTotal) * 100) : 0
+
+  // In-store vs Delivery ratio
+  const inStoreRevenue = metrics?.totalRevenue || 0
+  const deliveryRevenue = deliverySalesData?.totalDeliverySales || 0
+  const totalSalesForRatio = inStoreRevenue + deliveryRevenue
+  const inStorePercent = totalSalesForRatio > 0 ? Math.round((inStoreRevenue / totalSalesForRatio) * 100) : 0
+  const deliveryPercent = totalSalesForRatio > 0 ? Math.round((deliveryRevenue / totalSalesForRatio) * 100) : 0
+
+  // Average Daily Revenue (POS + Delivery combined)
+  const numberOfDays = metrics?.totalOrders || 1 // totalOrders = number of days with POS data
+  const avgDailyRevenue = totalCombinedRevenue / numberOfDays
+  const previousNumberOfDays = metrics?.previousOrders || 1
+  const previousAvgDailyRevenue = previousCombinedRevenue / previousNumberOfDays
+  const avgDailyRevenueChange = previousAvgDailyRevenue > 0
+    ? ((avgDailyRevenue - previousAvgDailyRevenue) / previousAvgDailyRevenue) * 100
+    : 0
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-6 space-y-6">
@@ -148,6 +197,14 @@ export default function DashboardPage() {
             >
               <Receipt className="w-4 h-4 mr-2" />
               Transaction History
+            </Button>
+            <Button
+              onClick={() => setIsDeliverySalesOpen(true)}
+              variant="outline"
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              <Truck className="w-4 h-4 mr-2" />
+              Delivery Sales
             </Button>
             <Button
               onClick={() => setIsChatOpen(!isChatOpen)}
@@ -184,11 +241,25 @@ export default function DashboardPage() {
             {/* Metrics Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
-                title="Total Revenue"
+                title="Total Revenue (All)"
+                value={totalCombinedRevenue}
+                format="currency"
+                change={combinedRevenueChange}
+                icon={<DollarSign className="h-4 w-4" />}
+              />
+              <MetricCard
+                title="In Store Revenue"
                 value={metrics?.totalRevenue || 0}
                 format="currency"
                 change={revenueChange}
                 icon={<DollarSign className="h-4 w-4" />}
+              />
+              <MetricCard
+                title="Delivery Sales"
+                value={deliverySalesData?.totalDeliverySales || 0}
+                format="currency"
+                change={deliverySalesData?.previousDeliverySales ? deliverySalesChange : undefined}
+                icon={<Truck className="h-4 w-4 text-emerald-500" />}
               />
               <MetricCard
                 title="Total Items Sold"
@@ -212,12 +283,23 @@ export default function DashboardPage() {
                 icon={<Moon className="h-4 w-4 text-purple-500" />}
               />
               <MetricCard
-                title="Average Sale Value"
-                value={Math.round(metrics?.averageSaleValue || 0)}
+                title="Avg Daily Revenue"
+                value={Math.round(avgDailyRevenue)}
                 format="currency"
-                change={avgSaleValueChange}
+                change={metrics?.previousOrders ? avgDailyRevenueChange : undefined}
                 icon={<TrendingUp className="h-4 w-4" />}
               />
+              <MetricCard
+                title="Avg Delivery Revenue"
+                value={Math.round(deliverySalesData?.averageDeliverySales || 0)}
+                format="currency"
+                change={deliverySalesData?.previousDeliveryDays ? avgDeliverySalesChange : undefined}
+                icon={<Truck className="h-4 w-4 text-emerald-500" />}
+              />
+            </div>
+
+            {/* Secondary Metrics Row */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 title="Avg Value per Item"
                 value={Math.round(metrics?.averageValuePerItem || 0)}
@@ -233,15 +315,21 @@ export default function DashboardPage() {
                 icon={<Package className="h-4 w-4" />}
               />
               <MetricCard
-                title="Top Item"
-                value={metrics?.topItem?.name || 'N/A'}
+                title="Lunch : Dinner"
+                value={lunchDinnerTotal > 0 ? `${lunchPercent}% : ${dinnerPercent}%` : 'N/A'}
                 format="text"
-                icon={<Package className="h-4 w-4" />}
+                icon={<Sun className="h-4 w-4 text-orange-500" />}
+              />
+              <MetricCard
+                title="In-store : Delivery"
+                value={totalSalesForRatio > 0 ? `${inStorePercent}% : ${deliveryPercent}%` : 'N/A'}
+                format="text"
+                icon={<Truck className="h-4 w-4 text-emerald-500" />}
               />
             </div>
 
             {/* Revenue Chart */}
-            <RevenueChart data={revenueData} />
+            <RevenueChart data={revenueData} deliverySalesMap={deliverySalesData?.dailyDeliverySales} />
 
             {/* Charts Grid */}
             <div className="grid gap-4 md:grid-cols-2">
@@ -271,6 +359,15 @@ export default function DashboardPage() {
       <TransactionHistoryUpload
         isOpen={isTransactionHistoryOpen}
         onClose={() => setIsTransactionHistoryOpen(false)}
+        onSuccess={() => {
+          loadDashboardData()
+        }}
+      />
+
+      {/* Delivery Sales Input Modal */}
+      <DeliverySalesInput
+        isOpen={isDeliverySalesOpen}
+        onClose={() => setIsDeliverySalesOpen(false)}
         onSuccess={() => {
           loadDashboardData()
         }}
