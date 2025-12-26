@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { X, Upload, Loader2, Calendar, Check, TrendingUp, TrendingDown } from 'lucide-react'
+import { X, Upload, Loader2, Calendar, Check, TrendingUp, TrendingDown, Edit3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,13 @@ interface TransactionHistoryData {
   }>
 }
 
+interface EditableData {
+  lunch_revenue: string
+  lunch_transaction_count: string
+  dinner_revenue: string
+  dinner_transaction_count: string
+}
+
 interface TransactionHistoryUploadProps {
   isOpen: boolean
   onClose: () => void
@@ -35,9 +42,23 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [transactionData, setTransactionData] = useState<TransactionHistoryData | null>(null)
+  const [editableData, setEditableData] = useState<EditableData>({
+    lunch_revenue: '0',
+    lunch_transaction_count: '0',
+    dinner_revenue: '0',
+    dinner_transaction_count: '0',
+  })
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Calculate totals from editable data
+  const lunchRevenue = parseInt(editableData.lunch_revenue) || 0
+  const lunchTransactionCount = parseInt(editableData.lunch_transaction_count) || 0
+  const dinnerRevenue = parseInt(editableData.dinner_revenue) || 0
+  const dinnerTransactionCount = parseInt(editableData.dinner_transaction_count) || 0
+  const totalRevenue = lunchRevenue + dinnerRevenue
+  const totalTransactionCount = lunchTransactionCount + dinnerTransactionCount
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -76,6 +97,13 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
         }
 
         setTransactionData(data)
+        // Populate editable data from AI response
+        setEditableData({
+          lunch_revenue: String(data.lunch_revenue || 0),
+          lunch_transaction_count: String(data.lunch_transaction_count || 0),
+          dinner_revenue: String(data.dinner_revenue || 0),
+          dinner_transaction_count: String(data.dinner_transaction_count || 0),
+        })
         // Use the date from the receipt if available
         if (data.business_date) {
           setSelectedDate(data.business_date)
@@ -105,8 +133,6 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
   }
 
   const handleSave = async () => {
-    if (!transactionData) return
-
     setStep('saving')
     setError(null)
 
@@ -116,12 +142,12 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessDate: selectedDate,
-          lunchRevenue: transactionData.lunch_revenue,
-          lunchTransactionCount: transactionData.lunch_transaction_count,
-          dinnerRevenue: transactionData.dinner_revenue,
-          dinnerTransactionCount: transactionData.dinner_transaction_count,
-          totalRevenue: transactionData.total_revenue,
-          totalTransactionCount: transactionData.total_transaction_count,
+          lunchRevenue: lunchRevenue,
+          lunchTransactionCount: lunchTransactionCount,
+          dinnerRevenue: dinnerRevenue,
+          dinnerTransactionCount: dinnerTransactionCount,
+          totalRevenue: totalRevenue,
+          totalTransactionCount: totalTransactionCount,
           receiptFilename: `${selectedDate}-transactions.jpg`,
         }),
       })
@@ -143,6 +169,12 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
     setStep('upload')
     setImagePreview(null)
     setTransactionData(null)
+    setEditableData({
+      lunch_revenue: '0',
+      lunch_transaction_count: '0',
+      dinner_revenue: '0',
+      dinner_transaction_count: '0',
+    })
     setError(null)
     setSelectedDate(new Date().toISOString().split('T')[0])
     onClose()
@@ -237,9 +269,9 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
             </div>
           )}
 
-          {step === 'preview' && transactionData && (
+          {step === 'preview' && (
             <div className="space-y-4">
-              {/* Date Picker - Editable */}
+              {/* Header with edit hint */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
@@ -250,12 +282,17 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
                     className="w-auto"
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setStep('upload')}>
-                  ← Back
-                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <Edit3 className="w-3 h-3" /> Click values to edit
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setStep('upload')}>
+                    ← Back
+                  </Button>
+                </div>
               </div>
 
-              {/* Revenue Split Cards */}
+              {/* Revenue Split Cards - Editable */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Lunch Card */}
                 <Card className="p-4 border-2 border-orange-200 bg-orange-50">
@@ -264,16 +301,28 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
                     <h3 className="font-semibold text-orange-900">Lunch Revenue</h3>
                     <span className="text-xs text-orange-600 ml-auto">Before 4pm</span>
                   </div>
-                  <div className="space-y-2">
-                    <div className="text-3xl font-bold text-orange-900">
-                      {formatCurrency(transactionData.lunch_revenue)}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-orange-700 mb-1 block">Revenue (₩)</label>
+                      <Input
+                        type="number"
+                        value={editableData.lunch_revenue}
+                        onChange={(e) => setEditableData(prev => ({ ...prev, lunch_revenue: e.target.value }))}
+                        className="text-2xl font-bold h-12 bg-white border-orange-300"
+                      />
                     </div>
-                    <div className="text-sm text-orange-700">
-                      {transactionData.lunch_transaction_count} transactions
+                    <div>
+                      <label className="text-xs text-orange-700 mb-1 block">Transactions</label>
+                      <Input
+                        type="number"
+                        value={editableData.lunch_transaction_count}
+                        onChange={(e) => setEditableData(prev => ({ ...prev, lunch_transaction_count: e.target.value }))}
+                        className="bg-white border-orange-300"
+                      />
                     </div>
-                    {transactionData.lunch_transaction_count > 0 && (
+                    {lunchTransactionCount > 0 && (
                       <div className="text-xs text-orange-600">
-                        Avg: {formatCurrency(Math.round(transactionData.lunch_revenue / transactionData.lunch_transaction_count))}
+                        Avg: {formatCurrency(Math.round(lunchRevenue / lunchTransactionCount))}
                       </div>
                     )}
                   </div>
@@ -286,37 +335,52 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
                     <h3 className="font-semibold text-purple-900">Dinner Revenue</h3>
                     <span className="text-xs text-purple-600 ml-auto">4pm and after</span>
                   </div>
-                  <div className="space-y-2">
-                    <div className="text-3xl font-bold text-purple-900">
-                      {formatCurrency(transactionData.dinner_revenue)}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-purple-700 mb-1 block">Revenue (₩)</label>
+                      <Input
+                        type="number"
+                        value={editableData.dinner_revenue}
+                        onChange={(e) => setEditableData(prev => ({ ...prev, dinner_revenue: e.target.value }))}
+                        className="text-2xl font-bold h-12 bg-white border-purple-300"
+                      />
                     </div>
-                    <div className="text-sm text-purple-700">
-                      {transactionData.dinner_transaction_count} transactions
+                    <div>
+                      <label className="text-xs text-purple-700 mb-1 block">Transactions</label>
+                      <Input
+                        type="number"
+                        value={editableData.dinner_transaction_count}
+                        onChange={(e) => setEditableData(prev => ({ ...prev, dinner_transaction_count: e.target.value }))}
+                        className="bg-white border-purple-300"
+                      />
                     </div>
-                    {transactionData.dinner_transaction_count > 0 && (
+                    {dinnerTransactionCount > 0 && (
                       <div className="text-xs text-purple-600">
-                        Avg: {formatCurrency(Math.round(transactionData.dinner_revenue / transactionData.dinner_transaction_count))}
+                        Avg: {formatCurrency(Math.round(dinnerRevenue / dinnerTransactionCount))}
                       </div>
                     )}
                   </div>
                 </Card>
               </div>
 
-              {/* Total Summary */}
+              {/* Total Summary - Auto-calculated */}
               <Card className="p-4 bg-gray-50 border-2">
                 <div className="flex justify-between items-center">
                   <div>
                     <div className="text-sm text-gray-600 mb-1">Total Revenue</div>
                     <div className="text-2xl font-bold">
-                      {formatCurrency(transactionData.total_revenue)}
+                      {formatCurrency(totalRevenue)}
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-600 mb-1">Total Transactions</div>
                     <div className="text-2xl font-bold">
-                      {transactionData.total_transaction_count}
+                      {totalTransactionCount}
                     </div>
                   </div>
+                </div>
+                <div className="text-xs text-gray-500 mt-2 text-center">
+                  Auto-calculated from lunch + dinner
                 </div>
               </Card>
 
@@ -325,23 +389,23 @@ export function TransactionHistoryUpload({ isOpen, onClose, onSuccess }: Transac
                 <div className="text-sm font-medium mb-2">Revenue Distribution</div>
                 <div className="flex h-8 rounded-lg overflow-hidden">
                   <div 
-                    className="bg-orange-400 flex items-center justify-center text-white text-xs font-medium"
+                    className="bg-orange-400 flex items-center justify-center text-white text-xs font-medium transition-all"
                     style={{ 
-                      width: `${transactionData.total_revenue > 0 ? (transactionData.lunch_revenue / transactionData.total_revenue * 100) : 50}%` 
+                      width: `${totalRevenue > 0 ? (lunchRevenue / totalRevenue * 100) : 50}%` 
                     }}
                   >
-                    {transactionData.total_revenue > 0 && 
-                      `${Math.round(transactionData.lunch_revenue / transactionData.total_revenue * 100)}%`
+                    {totalRevenue > 0 && 
+                      `${Math.round(lunchRevenue / totalRevenue * 100)}%`
                     }
                   </div>
                   <div 
-                    className="bg-purple-400 flex items-center justify-center text-white text-xs font-medium"
+                    className="bg-purple-400 flex items-center justify-center text-white text-xs font-medium transition-all"
                     style={{ 
-                      width: `${transactionData.total_revenue > 0 ? (transactionData.dinner_revenue / transactionData.total_revenue * 100) : 50}%` 
+                      width: `${totalRevenue > 0 ? (dinnerRevenue / totalRevenue * 100) : 50}%` 
                     }}
                   >
-                    {transactionData.total_revenue > 0 && 
-                      `${Math.round(transactionData.dinner_revenue / transactionData.total_revenue * 100)}%`
+                    {totalRevenue > 0 && 
+                      `${Math.round(dinnerRevenue / totalRevenue * 100)}%`
                     }
                   </div>
                 </div>

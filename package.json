@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.86.0",
@@ -19,6 +20,7 @@
     "next": "^16.0.7",
     "openai": "^6.9.1",
     "react": "19.2.0",
+    "react-day-picker": "^9.13.0",
     "react-dom": "19.2.0",
     "recharts": "^3.5.1",
     "tailwind-merge": "^3.4.0"

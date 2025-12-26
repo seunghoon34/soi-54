@@ -1,6 +1,12 @@
 import { subDays, subMonths, startOfDay, endOfDay, format, getDay } from 'date-fns'
 
-export type DateRange = '1d' | '3d' | '7d' | '1m' | '3m' | '6m' | '1y'
+export type DateRangePreset = '1d' | '3d' | '7d' | '1m' | '3m' | '6m' | '1y'
+export type DateRange = DateRangePreset | 'custom'
+
+export interface CustomDateRange {
+  from: Date
+  to: Date
+}
 
 export interface DateRangeResult {
   startDate: Date
@@ -9,11 +15,21 @@ export interface DateRangeResult {
   granularity: 'daily' | 'weekly' | 'monthly'
 }
 
-export function getDateRange(range: DateRange): DateRangeResult {
+export function getDateRange(range: DateRange, customRange?: CustomDateRange): DateRangeResult {
   let endDate = endOfDay(new Date())
   let startDate: Date
   let label: string
   let granularity: 'daily' | 'weekly' | 'monthly'
+
+  // Handle custom range
+  if (range === 'custom' && customRange) {
+    startDate = startOfDay(customRange.from)
+    endDate = endOfDay(customRange.to)
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    label = `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d')}`
+    granularity = daysDiff > 60 ? 'monthly' : daysDiff > 14 ? 'weekly' : 'daily'
+    return { startDate, endDate, label, granularity }
+  }
 
   // Skip Sunday for end date if today is Sunday
   endDate = endOfDay(skipSunday(endDate))

@@ -12,7 +12,7 @@ import { ReceiptUpload } from '@/components/receipt-upload'
 import { TransactionHistoryUpload } from '@/components/transaction-history-upload'
 import { DeliverySalesInput } from '@/components/delivery-sales-input'
 import { Button } from '@/components/ui/button'
-import { DateRange, getDateRange } from '@/lib/date-utils'
+import { DateRange, CustomDateRange, getDateRange } from '@/lib/date-utils'
 import {
   fetchDashboardMetrics,
   fetchRevenueData,
@@ -32,6 +32,7 @@ import { subDays } from 'date-fns'
 
 export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<DateRange>('7d')
+  const [customRange, setCustomRange] = useState<CustomDateRange | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -47,13 +48,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboardData()
-  }, [selectedRange])
+  }, [selectedRange, customRange])
 
   async function loadDashboardData() {
     setLoading(true)
     setError(null)
     try {
-      const { startDate, endDate } = getDateRange(selectedRange)
+      const { startDate, endDate } = getDateRange(selectedRange, customRange)
       
       // Calculate previous period dates
       const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -182,7 +183,14 @@ export default function DashboardPage() {
             <p className="text-muted-foreground">Restaurant sales and analytics</p>
           </div>
           <div className="flex items-center gap-3">
-            <DateRangeFilter selected={selectedRange} onSelect={setSelectedRange} />
+            <DateRangeFilter 
+              selected={selectedRange} 
+              customRange={customRange}
+              onSelect={(range, custom) => {
+                setSelectedRange(range)
+                setCustomRange(custom)
+              }} 
+            />
             <Button
               onClick={() => setIsUploadOpen(true)}
               variant="outline"
