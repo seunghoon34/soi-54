@@ -29,6 +29,7 @@ import {
 } from '@/lib/dashboard-data'
 import { TrendingUp, DollarSign, Package, Sparkles, Upload, Receipt, Sun, Moon, Truck } from 'lucide-react'
 import { subDays } from 'date-fns'
+import { LocationSelector } from '@/components/location-selector'
 
 export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<DateRange>('7d')
@@ -179,8 +180,10 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Soi 54 Dashboard</h1>
-            <p className="text-muted-foreground">Restaurant sales and analytics</p>
+            <div className="mb-1">
+              <LocationSelector />
+            </div>
+            <p className="text-muted-foreground">대전점 sales and analytics</p>
           </div>
           <div className="flex items-center gap-3">
             <DateRangeFilter 

@@ -83,6 +83,51 @@ export type Database = {
         }
         Relationships: []
       }
+      ewha_daily_sales: {
+        Row: {
+          baemin_revenue: number
+          coupang_revenue: number
+          created_at: string | null
+          id: string
+          instore_order_count: number
+          instore_revenue: number
+          notes: string | null
+          panda_revenue: number
+          sale_date: string
+          total_delivery_revenue: number | null
+          total_revenue: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          baemin_revenue?: number
+          coupang_revenue?: number
+          created_at?: string | null
+          id?: string
+          instore_order_count?: number
+          instore_revenue?: number
+          notes?: string | null
+          panda_revenue?: number
+          sale_date: string
+          total_delivery_revenue?: number | null
+          total_revenue?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          baemin_revenue?: number
+          coupang_revenue?: number
+          created_at?: string | null
+          id?: string
+          instore_order_count?: number
+          instore_revenue?: number
+          notes?: string | null
+          panda_revenue?: number
+          sale_date?: string
+          total_delivery_revenue?: number | null
+          total_revenue?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           category: string | null
