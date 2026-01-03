@@ -217,6 +217,7 @@ export default function DashboardPage() {
               <Truck className="w-4 h-4 mr-2" />
               Delivery Sales
             </Button>
+            {/* AI Assistant button - commented out for now
             <Button
               onClick={() => setIsChatOpen(!isChatOpen)}
               className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
@@ -224,6 +225,7 @@ export default function DashboardPage() {
               <Sparkles className="w-4 h-4 mr-2" />
               AI Assistant
             </Button>
+            */}
           </div>
         </div>
 
@@ -354,8 +356,9 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* AI Chat Sidebar */}
+      {/* AI Chat Sidebar - commented out for now
       <AIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      */}
 
       {/* Receipt Upload Modal */}
       <ReceiptUpload
