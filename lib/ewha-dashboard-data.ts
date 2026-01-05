@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { format, getDay, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 
 export interface EwhaDashboardMetrics {
   totalRevenue: number
@@ -53,11 +53,7 @@ export async function fetchEwhaDashboardMetrics(
 
   if (currentError) throw currentError
 
-  // Filter out Sundays
-  const currentDays = currentData?.filter((day: any) => {
-    const saleDate = parseISO(day.sale_date)
-    return getDay(saleDate) !== 0
-  }) || []
+  const currentDays = currentData || []
 
   // Fetch previous period data
   const { data: prevData, error: prevError } = await supabase
@@ -68,11 +64,7 @@ export async function fetchEwhaDashboardMetrics(
 
   if (prevError) throw prevError
 
-  // Filter out Sundays
-  const prevDays = prevData?.filter((day: any) => {
-    const saleDate = parseISO(day.sale_date)
-    return getDay(saleDate) !== 0
-  }) || []
+  const prevDays = prevData || []
 
   // Calculate current period metrics
   const totalRevenue = currentDays.reduce((sum: number, day: any) => sum + (day.total_revenue || 0), 0)
@@ -132,13 +124,7 @@ export async function fetchEwhaRevenueData(
 
   if (error) throw error
 
-  // Filter out Sundays
-  const filteredData = data?.filter((day: any) => {
-    const saleDate = parseISO(day.sale_date)
-    return getDay(saleDate) !== 0
-  }) || []
-
-  return filteredData.map((day: any) => ({
+  return (data || []).map((day: any) => ({
     date: day.sale_date,
     totalRevenue: day.total_revenue || 0,
     instoreRevenue: day.instore_revenue || 0,
