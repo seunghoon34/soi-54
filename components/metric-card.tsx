@@ -1,7 +1,18 @@
+'use client'
+
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { formatCurrency } from '@/lib/date-utils'
+
+// KRW to THB conversion rate
+const KRW_TO_THB_RATE = 0.022
+
+function formatBaht(krwAmount: number): string {
+  const bahtAmount = krwAmount * KRW_TO_THB_RATE
+  return `฿${bahtAmount.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
 
 interface MetricCardProps {
   title: string
@@ -13,12 +24,18 @@ interface MetricCardProps {
 }
 
 export function MetricCard({ title, value, change, format = 'number', icon, subtitle }: MetricCardProps) {
+  const [showBaht, setShowBaht] = useState(false)
+  
+  const isCurrency = format === 'currency' && typeof value === 'number'
+  
   const formattedValue =
-    format === 'currency' && typeof value === 'number'
+    isCurrency
       ? formatCurrency(value)
       : format === 'number' && typeof value === 'number'
         ? value.toLocaleString()
         : value
+  
+  const bahtValue = isCurrency ? formatBaht(value as number) : null
 
   const changeIcon =
     change !== undefined ? (
@@ -47,7 +64,18 @@ export function MetricCard({ title, value, change, format = 'number', icon, subt
         {icon && <div className="text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{formattedValue}</div>
+        <div 
+          className={`text-2xl font-bold ${isCurrency ? 'cursor-pointer' : ''}`}
+          onMouseEnter={() => isCurrency && setShowBaht(true)}
+          onMouseLeave={() => isCurrency && setShowBaht(false)}
+          title={bahtValue ? `≈ ${bahtValue}` : undefined}
+        >
+          {showBaht && bahtValue ? (
+            <span className="text-emerald-600">{bahtValue}</span>
+          ) : (
+            formattedValue
+          )}
+        </div>
         {subtitle && (
           <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
         )}

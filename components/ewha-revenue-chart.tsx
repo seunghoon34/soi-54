@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { formatCurrency, formatShortDate } from '@/lib/date-utils'
+import { formatCurrency } from '@/lib/date-utils'
+import { format } from 'date-fns'
 import { EwhaRevenueDataPoint } from '@/lib/ewha-dashboard-data'
 import { Store, Truck, TrendingUp } from 'lucide-react'
 
@@ -17,12 +18,52 @@ interface CustomTooltipProps {
   label?: string
 }
 
+interface CustomXAxisTickProps {
+  x?: number
+  y?: number
+  payload?: { value: string; index: number }
+  chartData?: Array<{ date: string; dayOfWeek: string }>
+}
+
+function CustomXAxisTick({ x, y, payload, chartData }: CustomXAxisTickProps) {
+  if (!payload || !chartData) return null
+  
+  const dataPoint = chartData[payload.index]
+  if (!dataPoint) return null
+  
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="middle"
+        fill="hsl(var(--muted-foreground))"
+        fontSize={11}
+      >
+        {dataPoint.date}
+      </text>
+      <text
+        x={0}
+        y={0}
+        dy={24}
+        textAnchor="middle"
+        fill="hsl(var(--muted-foreground))"
+        fontSize={9}
+        opacity={0.6}
+      >
+        {dataPoint.dayOfWeek}
+      </text>
+    </g>
+  )
+}
+
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (active && payload && payload.length) {
     const data = payload[0].payload
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[200px]">
-        <p className="font-semibold text-gray-900 mb-2">{label}</p>
+        <p className="font-semibold text-gray-900 mb-2">{data.fullLabel || label}</p>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between gap-3">
             <span className="text-gray-600">Total Revenue:</span>
@@ -77,16 +118,21 @@ export function EwhaRevenueChart({ data }: EwhaRevenueChartProps) {
   const [showBaemin, setShowBaemin] = useState(true)
   const [showPanda, setShowPanda] = useState(true)
 
-  const chartData = data.map((point) => ({
-    date: formatShortDate(point.date),
-    totalRevenue: point.totalRevenue,
-    instoreRevenue: point.instoreRevenue,
-    coupangRevenue: point.coupangRevenue,
-    baeminRevenue: point.baeminRevenue,
-    pandaRevenue: point.pandaRevenue,
-    totalDeliveryRevenue: point.totalDeliveryRevenue,
-    instoreOrderCount: point.instoreOrderCount,
-  }))
+  const chartData = data.map((point) => {
+    const dateObj = new Date(point.date)
+    return {
+      date: format(dateObj, 'MMM d'),
+      dayOfWeek: format(dateObj, 'EEE'), // Mon, Tue, Wed...
+      fullLabel: format(dateObj, 'EEE, MMM d'), // For tooltip
+      totalRevenue: point.totalRevenue,
+      instoreRevenue: point.instoreRevenue,
+      coupangRevenue: point.coupangRevenue,
+      baeminRevenue: point.baeminRevenue,
+      pandaRevenue: point.pandaRevenue,
+      totalDeliveryRevenue: point.totalDeliveryRevenue,
+      instoreOrderCount: point.instoreOrderCount,
+    }
+  })
 
   return (
     <Card className="col-span-full">
@@ -158,12 +204,12 @@ export function EwhaRevenueChart({ data }: EwhaRevenueChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={chartData}>
+          <LineChart data={chartData} margin={{ bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="date"
-              className="text-xs"
-              tick={{ fill: 'hsl(var(--muted-foreground))' }}
+              tick={<CustomXAxisTick chartData={chartData} />}
+              height={45}
             />
             <YAxis
               className="text-xs"
